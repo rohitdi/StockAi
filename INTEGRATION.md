@@ -203,6 +203,40 @@ Strictly statistical signal scores — NOT buy/sell recommendations.
 
 ---
 
+### 3.7 Price Alerts REST API
+
+#### Create Alert (`POST /api/alerts`)
+```json
+{
+  "ticker": "AAPL",
+  "target_price": 325.00,
+  "condition": "above",
+  "currency_symbol": "$"
+}
+```
+
+#### Check & Trigger Active Alerts (`POST /api/alerts/check`)
+Evaluates active alerts against live prices. Triggered alerts are marked and returned:
+```json
+{
+  "checked_count": 2,
+  "triggered_count": 1,
+  "triggered_alerts": [
+    {
+      "alert_id": "8f3b2...",
+      "ticker": "AAPL",
+      "target_price": 325.00,
+      "current_price": 326.50,
+      "condition": "above",
+      "currency_symbol": "$",
+      "message": "🚨 AAPL has hit $326.50 (Target: above $325.00)!"
+    }
+  ]
+}
+```
+
+---
+
 ## 4. Auth JWT Validation Handoff
 
 Host app signs a JWT using `HOST_APP_JWT_SECRET` (HS256):
@@ -214,3 +248,39 @@ Host app signs a JWT using `HOST_APP_JWT_SECRET` (HS256):
 }
 ```
 Include `Authorization: Bearer <TOKEN>` in HTTP requests. For local development, set `DISABLE_AUTH=true` in `.env` to bypass token verification.
+
+---
+
+## 5. Mobile Native Push Notifications & JS Bridge
+
+When embedded in mobile applications (React Native, iOS WKWebView, Android WebView, Flutter), the module communicates alert lifecycle events via standard bridge hooks:
+
+### 1. Alert Created Event (`stock-module:alert-created`)
+Dispatched when user configures a new alert:
+```json
+{
+  "type": "stock-module:alert-created",
+  "payload": {
+    "ticker": "SBIN.NS",
+    "target_price": 1100.00,
+    "condition": "above",
+    "currency_symbol": "₹",
+    "timestamp": "2026-08-21T01:00:00.000Z"
+  }
+}
+```
+
+### 2. Alert Triggered Event (`stock-module:alert-triggered`)
+Dispatched when price crosses the target threshold:
+```json
+{
+  "type": "stock-module:alert-triggered",
+  "payload": {
+    "title": "⚡ Price Alert Triggered: SBIN.NS",
+    "body": "🚨 SBIN.NS has hit ₹1102.50 (Target: above ₹1100.00)!",
+    "data": { "ticker": "SBIN.NS", "current_price": 1102.50 }
+  }
+}
+```
+The native mobile host app can bind these events to schedule local push notifications via **Apple Push Notification Service (APNs)** or **Firebase Cloud Messaging (FCM)**.
+

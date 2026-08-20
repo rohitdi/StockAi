@@ -114,6 +114,7 @@ def calculate_ticker_signals(raw_query: str) -> Optional[Dict[str, Any]]:
         "previous_close": summary["previous_close"],
         "change_pct": summary["change_pct"],
         "currency": summary.get("currency", "USD"),
+        "currency_symbol": summary.get("currency_symbol", "$"),
         "composite_score": composite_score,
         "sentiment": sentiment_data["sentiment"],
         "components": {

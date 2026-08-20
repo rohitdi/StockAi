@@ -3,26 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stock Research Module</title>
+  <title>Stock Intelligence Dashboard</title>
   
-  <!-- Modern Google Fonts -->
+  <!-- Premium Modern Google Fonts: Outfit, Inter, JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- HTMX Library for dynamic updates without full reloads -->
+  <!-- HTMX Library for dynamic component updates -->
   <script src="https://unpkg.com/htmx.org@1.9.6"></script>
   
-  <!-- Module Stylesheet -->
+  <!-- High-Performance Chart.js Dual-Axis Financial Visualizer -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- 3D Glassmorphic Module Stylesheet -->
   <link rel="stylesheet" href="/static/css/panel.css">
 </head>
 <body>
+  <!-- Background Ambient Mesh Blobs -->
+  <div class="ambient-blob blob-1"></div>
+  <div class="ambient-blob blob-2"></div>
+
   <div class="module-container mode-{{ mode }}">
     
     <!-- Sticky Header -->
     <header class="panel-header">
       <div class="brand">
-        <div class="brand-icon">📈</div>
+        <div class="brand-icon">⚡</div>
         <div class="brand-title">Stock Intelligence</div>
       </div>
       <button class="close-btn" onclick="closePanel()" title="Close Research Drawer">✕</button>
@@ -45,7 +52,7 @@
         <input type="text" 
                name="ticker" 
                class="search-input" 
-               placeholder="Search stock symbol or name (e.g. AAPL, sbi stock, reliance)" 
+               placeholder="Search symbol or company (e.g. AAPL, sbi stock, reliance)" 
                value="{{ raw_ticker if raw_ticker else ticker }}" 
                required 
                autocomplete="off">
@@ -53,22 +60,56 @@
           Search
         </button>
       </form>
-      <div id="search-spinner" class="htmx-indicator" style="margin-top: 6px;">
-        Fetching live market data & Headlines...
+      
+      <!-- Search Fintech Pulse Engine Loading State -->
+      <div id="search-spinner" class="htmx-indicator fintech-loading-hero">
+        <!-- 1. Top: Centered Animated ECG/Pulse Grid (120px height) -->
+        <div class="hero-pulse-viewport">
+          <div class="pulse-grid-bg"></div>
+          <div class="radar-beacon-container">
+            <div class="radar-beacon-ring"></div>
+            <div class="radar-beacon-core"></div>
+          </div>
+          <svg class="ecg-svg" viewBox="0 0 500 120" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="ecgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.2"/>
+                <stop offset="45%" stop-color="#00E5FF" stop-opacity="1"/>
+                <stop offset="75%" stop-color="#A855F7" stop-opacity="1"/>
+                <stop offset="100%" stop-color="#EC4899" stop-opacity="0.3"/>
+              </linearGradient>
+            </defs>
+            <path class="ecg-path" d="M 0,60 L 100,60 L 120,30 L 140,95 L 160,15 L 180,80 L 200,50 L 220,60 L 320,60 L 340,25 L 360,100 L 380,35 L 400,75 L 420,60 L 500,60" />
+          </svg>
+        </div>
+
+        <!-- 2. Middle: Dynamic Centered Status Text with Monospace Font -->
+        <div class="hero-status-box">
+          <span class="hero-status-text" id="search-status-text">[1/3] Resolving exchange ticker & live quote...</span>
+          <span class="blinking-cursor">|</span>
+        </div>
+
+        <!-- 3. Bottom: Full-Width Horizontal Skeleton Loading Bars -->
+        <div class="hero-skeleton-bars">
+          <div class="hero-shimmer-bar" style="width: 100%;"></div>
+          <div class="hero-shimmer-bar" style="width: 90%;"></div>
+          <div class="hero-shimmer-bar" style="width: 95%;"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div style="padding: 0 18px 10px; display: flex; gap: 8px;">
-      <button class="search-btn" style="flex: 1; padding: 6px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);"
-              onclick="document.getElementById('stock-research-view').style.display='block'; document.getElementById('screener-view-area').style.display='none';">
-        📈 Research & Q&A
+    <!-- Navigation Pill Tabs -->
+    <div class="tab-pills">
+      <button class="nav-pill active" id="btn-tab-research"
+              onclick="document.getElementById('stock-research-view').style.display='block'; document.getElementById('screener-view-area').style.display='none'; this.classList.add('active'); document.getElementById('btn-tab-screener').classList.remove('active');">
+        <span>📈</span> Stock Overview
       </button>
-      <button class="search-btn" style="flex: 1; padding: 6px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);"
+      <button class="nav-pill" id="btn-tab-screener"
               hx-post="/partials/screener"
               hx-target="#screener-view-area"
-              onclick="document.getElementById('stock-research-view').style.display='none'; document.getElementById('screener-view-area').style.display='block';">
-        📊 Signal Screener
+              hx-indicator="#screener-spinner"
+              onclick="document.getElementById('stock-research-view').style.display='none'; document.getElementById('screener-view-area').style.display='block'; this.classList.add('active'); document.getElementById('btn-tab-research').classList.remove('active');">
+        <span>📊</span> Signal Screener
       </button>
     </div>
 
@@ -80,62 +121,107 @@
         <div id="stock-display-area">
           {% include "partials/summary.html" %}
         </div>
-
-        <!-- Rule-Based Q&A Box -->
-        <div class="card qa-card" style="margin-top: 16px;">
-          <div class="qa-header">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <strong style="font-size: 14px;">Stock Q&A Assistant</strong>
-              <span class="qa-badge">Rule-Based Matcher</span>
-            </div>
-          </div>
-
-          <p style="font-size: 11px; color: var(--text-muted);">
-            Note: Answers are pattern-matched against pre-configured rules (no LLM).
-          </p>
-
-          <form class="qa-form" 
-                hx-post="/partials/qa_response" 
-                hx-target="#qa-result" 
-                hx-indicator="#qa-spinner">
-            <input type="hidden" name="ticker" value="{{ ticker }}">
-            <input type="text" 
-                   name="question" 
-                   class="qa-input" 
-                   placeholder="Try: 'price of AAPL', 'news on TSLA', 'sentiment for NVDA'" 
-                   required 
-                   autocomplete="off">
-            <button type="submit" class="search-btn qa-btn" style="padding: 0 12px; font-size: 12px;">
-              Ask
-            </button>
-          </form>
-
-          <div id="qa-spinner" class="htmx-indicator">
-            Matching query pattern...
-          </div>
-
-          <div id="qa-result" class="qa-output">
-            <div style="color: var(--text-muted); font-size: 12px;">
-              Ask a stock question above or click a suggested prompt:
-              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
-                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='price of {{ ticker }}'">Price of {{ ticker }}</button>
-                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='news on {{ ticker }}'">News on {{ ticker }}</button>
-                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='sentiment for {{ ticker }}'">Sentiment for {{ ticker }}</button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div><!-- End Tab 1: stock-research-view -->
 
       <!-- Tab 2: Signal Screener View -->
       <div id="screener-view-area" style="display: none;">
-        <!-- Loaded dynamically via HTMX -->
+        <!-- Screener Centered Hero Loading Screen -->
+        <div id="screener-spinner" class="htmx-indicator fintech-loading-hero">
+          <!-- 1. Top: Centered Animated ECG/Pulse Grid (120px height) -->
+          <div class="hero-pulse-viewport">
+            <div class="pulse-grid-bg"></div>
+            <div class="radar-beacon-container">
+              <div class="radar-beacon-ring"></div>
+              <div class="radar-beacon-core"></div>
+            </div>
+            <svg class="ecg-svg" viewBox="0 0 500 120" preserveAspectRatio="none">
+              <path class="ecg-path" d="M 0,60 L 100,60 L 120,30 L 140,95 L 160,15 L 180,80 L 200,50 L 220,60 L 320,60 L 340,25 L 360,100 L 380,35 L 400,75 L 420,60 L 500,60" />
+            </svg>
+          </div>
+
+          <!-- 2. Middle: Dynamic Centered Status Text with Monospace Font -->
+          <div class="hero-status-box">
+            <span class="hero-status-text" id="screener-status-text">[1/4] Fetching watchlist candles...</span>
+            <span class="blinking-cursor">|</span>
+          </div>
+
+          <!-- 3. Bottom: Full-Width Horizontal Skeleton Loading Bars -->
+          <div class="hero-skeleton-bars">
+            <div class="hero-shimmer-bar" style="width: 100%;"></div>
+            <div class="hero-shimmer-bar" style="width: 88%;"></div>
+            <div class="hero-shimmer-bar" style="width: 94%;"></div>
+          </div>
+        </div>
       </div>
 
     </main>
   </div>
 
-  <!-- Host App JS Bridge -->
+  <!-- Host App JS Bridge & Step Cycler -->
   <script src="/static/js/bridge.js"></script>
+
+  <!-- Detailed Chart Modal Container -->
+  <div id="modal-container">
+    <!-- Global Modal Loader -->
+    <div id="modal-loader" class="htmx-indicator chart-skeleton-container" style="position: fixed; z-index: 99999; border-radius: 0;">
+      <div class="skeleton-shimmer-layer"></div>
+      <div class="chart-glass-loader-badge">
+        <div class="radar-dot"></div>
+        <div class="loader-text-badge">Initializing Technical Chart & Indicators...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step Cycling Driver Script -->
+  <script>
+    (function() {
+      const screenerSteps = [
+        "[1/4] Fetching watchlist candles...",
+        "[2/4] Scoring technical indicators (RSI, MACD, Volume)...",
+        "[3/4] Running Scikit-Learn NLP sentiment engine...",
+        "[4/4] Compiling signal confidence scores..."
+      ];
+
+      const searchSteps = [
+        "[1/3] Resolving exchange ticker & live quote...",
+        "[2/3] Scraping news headlines & sentiment...",
+        "[3/3] Generating multi-timeframe chart..."
+      ];
+
+      let screenerTimer = null;
+      let searchTimer = null;
+
+      document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        const path = evt.detail.requestConfig.path || '';
+        
+        if (path.includes('/partials/screener')) {
+          let idx = 0;
+          const textEl = document.getElementById('screener-status-text');
+          if (textEl) textEl.innerText = screenerSteps[0];
+          if (screenerTimer) clearInterval(screenerTimer);
+          screenerTimer = setInterval(() => {
+            idx = (idx + 1) % screenerSteps.length;
+            if (textEl) textEl.innerText = screenerSteps[idx];
+          }, 700);
+        }
+
+        if (path.includes('/partials/summary')) {
+          let idx = 0;
+          const textEl = document.getElementById('search-status-text');
+          if (textEl) textEl.innerText = searchSteps[0];
+          if (searchTimer) clearInterval(searchTimer);
+          searchTimer = setInterval(() => {
+            idx = (idx + 1) % searchSteps.length;
+            if (textEl) textEl.innerText = searchSteps[idx];
+          }, 700);
+        }
+      });
+
+      document.body.addEventListener('htmx:afterRequest', function() {
+        if (screenerTimer) clearInterval(screenerTimer);
+        if (searchTimer) clearInterval(searchTimer);
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -10,6 +10,7 @@ from backend.routes.health import router as health_router
 from backend.routes.stock import router as stock_router
 from backend.routes.query import router as query_router, process_qa_query, QueryRequest
 from backend.routes.screener import router as screener_router, DEFAULT_WATCHLIST
+from backend.routes.alerts import router as alerts_router
 from backend.cache import get_cached_summary, get_cached_news, get_cached_chart
 from backend.ml.infer import predict_stock_sentiment
 from backend.screener import rank_watchlist_signals
@@ -45,6 +46,7 @@ app.include_router(health_router)
 app.include_router(stock_router)
 app.include_router(query_router)
 app.include_router(screener_router)
+app.include_router(alerts_router)
 
 @app.get("/", response_class=HTMLResponse)
 def get_panel_view(
@@ -113,12 +115,35 @@ def get_chart_partial(
     from backend.scraping.ticker_resolver import resolve_ticker
     resolved = resolve_ticker(ticker) or ticker.upper()
     chart = get_cached_chart(resolved, period=period)
+    summary = get_cached_summary(resolved)
 
     return templates.TemplateResponse(
         "partials/stock_chart.html",
         {
             "request": request,
-            "chart": chart
+            "chart": chart,
+            "summary": summary
+        }
+    )
+
+@app.post("/partials/detailed_chart", response_class=HTMLResponse)
+def get_detailed_chart_partial(
+    request: Request,
+    ticker: str = Form(...),
+    period: str = Form("1Y")
+):
+    from backend.scraping.ticker_resolver import resolve_ticker
+    resolved = resolve_ticker(ticker) or ticker.upper()
+    chart = get_cached_chart(resolved, period=period)
+    summary = get_cached_summary(resolved)
+
+    return templates.TemplateResponse(
+        "partials/detailed_chart_modal.html",
+        {
+            "request": request,
+            "chart": chart,
+            "summary": summary,
+            "ticker": resolved.upper()
         }
     )
 

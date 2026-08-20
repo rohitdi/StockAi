@@ -1,28 +1,61 @@
 {% if chart %}
-<div class="card chart-card" style="margin-top: 14px; padding: 14px;">
+<div class="card chart-card" style="margin-top: 16px; padding: 16px; position: relative;">
   
-  <!-- Header: Timeframe Selector & Trend Metric -->
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-    <div>
-      <span style="font-size: 13px; font-weight: 700; color: var(--text-primary);">Periodical Chart</span>
-      <span style="font-size: 11px; font-weight: 600; margin-left: 6px;" class="price-pct {{ 'up' if chart.trend == 'up' else 'down' }}">
-        {{ '▲ +' if chart.trend == 'up' else '▼ ' }}{{ chart.change_pct }}% ({{ chart.period }})
-      </span>
+  <!-- Modern Chart Skeleton Loader & Wave Shimmer -->
+  <div id="chart-loading-indicator" class="htmx-indicator chart-skeleton-container">
+    <!-- Dummy Skeleton Grid & Wave Path -->
+    <svg width="100%" height="100%" viewBox="0 0 360 145" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0; opacity: 0.35;">
+      <line x1="0" y1="20" x2="360" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
+      <line x1="0" y1="72" x2="360" y2="72" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
+      <line x1="0" y1="125" x2="360" y2="125" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
+      <path d="M 0,100 Q 90,40 180,75 T 360,30 L 360,145 L 0,145 Z" fill="rgba(0, 229, 255, 0.04)"/>
+      <path d="M 0,100 Q 90,40 180,75 T 360,30" fill="none" stroke="rgba(0, 229, 255, 0.3)" stroke-width="2" stroke-dasharray="6,4"/>
+    </svg>
+
+    <!-- Horizontal Wave Shimmer Effect -->
+    <div class="skeleton-shimmer-layer"></div>
+
+    <!-- Centered Glassmorphic Loader Pill -->
+    <div class="chart-glass-loader-badge">
+      <div class="radar-dot"></div>
+      <div class="loader-text-badge">Fetching Market Data...</div>
+    </div>
+  </div>
+
+  <!-- Responsive Header: Timeframe Selector & Trend Metric -->
+  <div class="chart-header-toolbar">
+    <!-- Top Row on Mobile / Left Group on Desktop -->
+    <div class="chart-header-top-row">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span class="chart-header-title" style="font-family: var(--font-heading); font-size: 14px; font-weight: 800; color: var(--text-primary);">Periodical Chart</span>
+        <span class="price-pct {{ 'up' if chart.trend == 'up' else 'down' }}" style="font-size: 11px;">
+          {{ '▲ +' if chart.trend == 'up' else '▼ ' }}{{ chart.change_pct }}% ({{ chart.period }})
+        </span>
+      </div>
+      <button class="expand-chart-btn"
+              hx-post="/partials/detailed_chart"
+              hx-vals='{"ticker": "{{ chart.ticker }}", "period": "{{ chart.period }}"}'
+              hx-target="#modal-container"
+              hx-indicator="#modal-loader"
+              title="Expand to Full Detailed Technical Chart">
+        ⤢ Expand
+      </button>
     </div>
 
-    <!-- Timeframe Toggles -->
-    <div class="timeframe-toggles" style="display: flex; gap: 4px;">
-      {% for p in ["1D", "1W", "1M", "1Y", "ALL"] %}
-        <button class="tf-btn {{ 'active' if chart.period == p or (chart.period == '5Y' and p == 'ALL') else '' }}"
-                hx-post="/partials/chart"
-                hx-vals='{"ticker": "{{ chart.ticker }}", "period": "{{ p }}"}'
-                hx-target="#chart-container-area"
-                style="background: {{ 'var(--accent-indigo)' if (chart.period == p or (chart.period == '5Y' and p == 'ALL')) else 'var(--bg-input)' }};
-                       color: #fff; border: 1px solid var(--border-color); font-size: 10px; font-weight: 600; 
-                       padding: 3px 8px; border-radius: 4px; cursor: pointer;">
-          {{ p }}
-        </button>
-      {% endfor %}
+    <!-- Bottom Row on Mobile / Right Group on Desktop (Scrollable Toolbar) -->
+    <div class="chart-timeframe-toolbar">
+      <div class="timeframe-toggles">
+        {% for p in ["1D", "1W", "1M", "1Y", "ALL"] %}
+          {% set is_act = (chart.period == p or (chart.period == '5Y' and p == 'ALL')) %}
+          <button class="tf-btn {{ 'active' if is_act else '' }}"
+                  hx-post="/partials/chart"
+                  hx-vals='{"ticker": "{{ chart.ticker }}", "period": "{{ p }}"}'
+                  hx-target="#chart-container-area"
+                  hx-indicator="#chart-loading-indicator">
+            {{ p }}
+          </button>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
@@ -33,61 +66,92 @@
   {% set p_range = (p_max - p_min) if (p_max - p_min) > 0 else 1.0 %}
   {% set n = prices|length %}
   
-  <div style="position: relative; width: 100%; height: 140px;" id="svg-chart-wrapper">
-    <svg width="100%" height="140" viewBox="0 0 360 140" preserveAspectRatio="none" style="overflow: visible;">
+  <div style="position: relative; width: 100%; height: 145px; cursor: pointer;" 
+       id="svg-chart-wrapper"
+       class="clickable-chart-area"
+       hx-post="/partials/detailed_chart"
+       hx-vals='{"ticker": "{{ chart.ticker }}", "period": "{{ chart.period }}"}'
+       hx-target="#modal-container"
+       hx-indicator="#modal-loader"
+       title="Click to view detailed chart with 50/200 DMA and Volume">
+    <svg width="100%" height="145" viewBox="0 0 360 145" preserveAspectRatio="none" style="overflow: visible;">
       <defs>
+        <!-- Neon Glow Filter -->
+        <filter id="neonGlowGreen" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="neonGlowRed" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
         <linearGradient id="chartGradientGreen" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#10b981" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+          <stop offset="0%" stop-color="#34d399" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
         </linearGradient>
         <linearGradient id="chartGradientRed" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ef4444" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="#ef4444" stop-opacity="0.0"/>
+          <stop offset="0%" stop-color="#f87171" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#f87171" stop-opacity="0.0"/>
         </linearGradient>
       </defs>
 
       <!-- Grid lines -->
-      <line x1="0" y1="20" x2="360" y2="20" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
-      <line x1="0" y1="70" x2="360" y2="70" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
-      <line x1="0" y1="120" x2="360" y2="120" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3,3"/>
+      <line x1="0" y1="20" x2="360" y2="20" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3"/>
+      <line x1="0" y1="72" x2="360" y2="72" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3"/>
+      <line x1="0" y1="125" x2="360" y2="125" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3"/>
 
-      {% set stroke_color = "#10b981" if chart.trend == "up" else "#ef4444" %}
+      {% set stroke_color = "#34d399" if chart.trend == "up" else "#f87171" %}
       {% set fill_grad = "url(#chartGradientGreen)" if chart.trend == "up" else "url(#chartGradientRed)" %}
+      {% set glow_filter = "url(#neonGlowGreen)" if chart.trend == "up" else "url(#neonGlowRed)" %}
 
       <!-- Path generator logic in Jinja -->
       {% set path_pts = [] %}
       {% for p in prices %}
         {% set x = (loop.index0 / (n - 1) * 360)|round(1) if n > 1 else 180 %}
-        {% set y = (130 - ((p - p_min) / p_range * 110))|round(1) %}
+        {% set y = (135 - ((p - p_min) / p_range * 115))|round(1) %}
         {% set _ = path_pts.append(x|string + "," + y|string) %}
       {% endfor %}
       
       {% set line_path = "M " + path_pts|join(" L ") %}
-      {% set area_path = line_path + " L 360,135 L 0,135 Z" %}
+      {% set area_path = line_path + " L 360,140 L 0,140 Z" %}
 
       <!-- Area fill -->
       <path d="{{ area_path }}" fill="{{ fill_grad }}"/>
       
-      <!-- Trend Line -->
-      <path d="{{ line_path }}" fill="none" stroke="{{ stroke_color }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Glowing Animated Trend Line -->
+      <path d="{{ line_path }}" 
+            fill="none" 
+            stroke="{{ stroke_color }}" 
+            stroke-width="2.5" 
+            stroke-linecap="round" 
+            stroke-linejoin="round"
+            filter="{{ glow_filter }}"
+            class="animated-chart-path"/>
     </svg>
 
     <!-- Hover Tooltip Overlay -->
     <div id="chart-tooltip" 
-         style="display: none; position: absolute; top: 8px; left: 10px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 10px; pointer-events: none; z-index: 10;">
-      <span id="tooltip-date" style="color: var(--text-muted);"></span> • <strong id="tooltip-price"></strong>
+         style="display: none; position: absolute; top: 8px; left: 10px; background: rgba(11, 16, 30, 0.95); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; font-size: 11px; pointer-events: none; z-index: 10; backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+      <span id="tooltip-date" style="color: var(--text-muted);"></span> • <strong id="tooltip-price" style="color: #fff;"></strong>
     </div>
   </div>
 
   <!-- High / Low Muted Labels -->
-  <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 6px;">
-    <span>Low: ${{ chart.low }}</span>
-    <span>High: ${{ chart.high }}</span>
+  <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+    <span>Low: <strong>{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.low }}</strong></span>
+    <span>High: <strong>{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.high }}</strong></span>
   </div>
 
 </div>
 {% else %}
-<div class="card" style="margin-top: 14px; padding: 14px; text-align: center; color: var(--text-muted); font-size: 12px;">
+<div class="card" style="margin-top: 16px; padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px;">
   Chart data currently unavailable for timeframe.
 </div>
 {% endif %}

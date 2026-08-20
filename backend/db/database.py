@@ -72,6 +72,18 @@ class DatabaseClient:
                 resolved_ticker TEXT NOT NULL,
                 resolved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS price_alerts (
+                id TEXT PRIMARY KEY,
+                ticker TEXT NOT NULL,
+                target_price REAL NOT NULL,
+                condition TEXT NOT NULL,
+                currency_symbol TEXT DEFAULT '$',
+                status TEXT DEFAULT 'active',
+                user_id TEXT DEFAULT 'guest',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                triggered_at TIMESTAMP
+            );
         """)
         conn.commit()
         conn.close()
@@ -244,4 +256,123 @@ class DatabaseClient:
         except Exception as e:
             print(f"[DB] SQLite resolution save error: {e}")
 
+    def create_alert(self, ticker: str, target_price: float, condition: str, currency_symbol: str = "$", user_id: str = "guest") -> Dict[str, Any]:
+        import uuid
+        alert_id = str(uuid.uuid4())
+        now_iso = datetime.utcnow().isoformat()
+        clean_ticker = ticker.strip().upper()
+        clean_cond = "above" if "above" in condition.lower() else "below"
+
+        record = {
+            "id": alert_id,
+            "ticker": clean_ticker,
+            "target_price": float(target_price),
+            "condition": clean_cond,
+            "currency_symbol": currency_symbol,
+            "status": "active",
+            "user_id": user_id,
+            "created_at": now_iso,
+            "triggered_at": None
+        }
+
+        if self.use_supabase:
+            try:
+                self.supabase.table("price_alerts").insert(record).execute()
+                return record
+            except Exception as e:
+                print(f"[DB] Supabase create alert error: {e}")
+
+        # SQLite fallback
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO price_alerts (id, ticker, target_price, condition, currency_symbol, status, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (alert_id, clean_ticker, float(target_price), clean_cond, currency_symbol, "active", user_id, now_iso)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DB] SQLite create alert error: {e}")
+
+        return record
+
+    def get_alerts(self, status: str = "active", user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if self.use_supabase:
+            try:
+                query = self.supabase.table("price_alerts").select("*").eq("status", status)
+                if user_id:
+                    query = query.eq("user_id", user_id)
+                res = query.order("created_at", desc=True).execute()
+                if res.data:
+                    return res.data
+            except Exception as e:
+                print(f"[DB] Supabase get alerts error: {e}")
+
+        # SQLite fallback
+        results = []
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            query = "SELECT * FROM price_alerts WHERE status=?"
+            params = [status]
+            if user_id:
+                query += " AND user_id=?"
+                params.append(user_id)
+            query += " ORDER BY created_at DESC"
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            for r in rows:
+                results.append(dict(r))
+            conn.close()
+        except Exception as e:
+            print(f"[DB] SQLite get alerts error: {e}")
+        return results
+
+    def trigger_alert(self, alert_id: str) -> bool:
+        now_iso = datetime.utcnow().isoformat()
+        if self.use_supabase:
+            try:
+                self.supabase.table("price_alerts").update({
+                    "status": "triggered",
+                    "triggered_at": now_iso
+                }).eq("id", alert_id).execute()
+                return True
+            except Exception as e:
+                print(f"[DB] Supabase trigger alert error: {e}")
+
+        # SQLite fallback
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE price_alerts SET status='triggered', triggered_at=? WHERE id=?", (now_iso, alert_id))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"[DB] SQLite trigger alert error: {e}")
+            return False
+
+    def delete_alert(self, alert_id: str) -> bool:
+        if self.use_supabase:
+            try:
+                self.supabase.table("price_alerts").delete().eq("id", alert_id).execute()
+                return True
+            except Exception as e:
+                print(f"[DB] Supabase delete alert error: {e}")
+
+        # SQLite fallback
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM price_alerts WHERE id=?", (alert_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"[DB] SQLite delete alert error: {e}")
+            return False
+
 db_client = DatabaseClient()
+

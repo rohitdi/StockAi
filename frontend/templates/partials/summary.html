@@ -6,7 +6,7 @@
       <div style="font-size: 12px; color: var(--text-muted);">{{ summary.ticker }} • {{ summary.currency }}</div>
     </div>
     <div style="text-align: right;">
-      <div class="stock-price">${{ "%.2f"|format(summary.current_price) }}</div>
+      <div class="stock-price">{{ summary.currency_symbol }}{{ "%.2f"|format(summary.current_price) }}</div>
       <div>
         {% if summary.change_pct >= 0 %}
           <span class="price-pct up">+{{ summary.change_pct }}%</span>
@@ -20,11 +20,11 @@
   <div class="metrics-grid">
     <div class="metric-item">
       <span class="metric-label">Previous Close</span>
-      <span class="metric-value">${{ "%.2f"|format(summary.previous_close) }}</span>
+      <span class="metric-value">{{ summary.currency_symbol }}{{ "%.2f"|format(summary.previous_close) }}</span>
     </div>
     <div class="metric-item">
       <span class="metric-label">52-Wk Range</span>
-      <span class="metric-value">${{ summary.fifty_two_low }} - ${{ summary.fifty_two_high }}</span>
+      <span class="metric-value">{{ summary.currency_symbol }}{{ summary.fifty_two_low }} - {{ summary.currency_symbol }}{{ summary.fifty_two_high }}</span>
     </div>
     <div class="metric-item">
       <span class="metric-label">Volume</span>

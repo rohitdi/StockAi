@@ -14,18 +14,66 @@ class QueryRequest(BaseModel):
     question: str
     ticker: Optional[str] = None
 
+def extract_target_from_question(question: str, intent_type: str) -> Optional[str]:
+    """
+    Extracts raw ticker/entity query string from natural language question patterns.
+    """
+    q_lower = question.lower().strip()
+    
+    if intent_type == "price":
+        # 1. Matches: "price of sbi", "price for AAPL", "quote for reliance", "what is TSLA trading at", "how much is sbi stock"
+        m1 = re.search(r"(?:price\s+of|price\s+for|price\s+on|quote\s+for|quote\s+of|what\s+is|how\s+much\s+is)\s+(.+?)(?:\s+trading\s+at|\s+worth|\s+cost|\?|$)", q_lower)
+        if m1 and m1.group(1).strip():
+            return m1.group(1).strip()
+
+        # 2. Matches: "sbi price", "reliance quote", "AAPL trading at"
+        m2 = re.search(r"(.+?)\s+(?:price|quote|trading\s+at|worth|cost)", q_lower)
+        if m2 and m2.group(1).strip():
+            return m2.group(1).strip()
+
+    elif intent_type == "news":
+        # 1. Matches: "news on sbi", "latest headlines for reliance", "news about AAPL"
+        m1 = re.search(r"(?:news\s+on|news\s+about|news\s+for|headlines\s+for|latest\s+on|latest\s+for)\s+(.+?)(?:\?|$)", q_lower)
+        if m1 and m1.group(1).strip():
+            return m1.group(1).strip()
+
+        # 2. Matches: "sbi news", "reliance headlines", "NVDA updates"
+        m2 = re.search(r"(.+?)\s+(?:news|headlines|latest|updates|articles)", q_lower)
+        if m2 and m2.group(1).strip():
+            return m2.group(1).strip()
+
+    elif intent_type == "sentiment":
+        # 1. Matches: "sentiment for sbi", "sentiment on reliance", "is AAPL bullish", "prediction for TSLA"
+        m1 = re.search(r"(?:sentiment\s+for|sentiment\s+on|sentiment\s+about|predict\s+for|prediction\s+for|is)\s+(.+?)(?:\s+bullish|\s+bearish|\?|$)", q_lower)
+        if m1 and m1.group(1).strip():
+            return m1.group(1).strip()
+
+        # 2. Matches: "sbi sentiment", "reliance prediction", "NVDA model"
+        m2 = re.search(r"(.+?)\s+(?:sentiment|prediction|lean|model|forecast)", q_lower)
+        if m2 and m2.group(1).strip():
+            return m2.group(1).strip()
+
+    return None
+
 @router.post("/query")
 def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(verify_token)):
     question = body.question.strip()
-    raw_ticker_candidate = body.ticker if body.ticker and body.ticker.strip() else question
-    
-    # Try resolving ticker from candidate
-    resolved_ticker = resolve_ticker(raw_ticker_candidate)
-    
     q_lower = question.lower()
     
+    # Determine Intent Type
+    is_price = any(k in q_lower for k in ["price", "quote", "trading at", "worth", "cost"])
+    is_news = any(k in q_lower for k in ["news", "headline", "latest", "article", "update"])
+    is_sentiment = any(k in q_lower for k in ["sentiment", "bullish", "bearish", "predict", "lean", "model", "forecast"])
+
     # 1. Price Intent
-    if any(k in q_lower for k in ["price", "quote", "trading at", "worth", "cost"]):
+    if is_price:
+        raw_target = extract_target_from_question(question, "price")
+        # Fallback to question itself or body.ticker if regex extraction is blank
+        if not raw_target:
+            raw_target = question
+            
+        resolved_ticker = resolve_ticker(raw_target)
+        
         if not resolved_ticker:
             return {
                 "intent": "price",
@@ -34,6 +82,7 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
                 "answer": f"Couldn't identify a matching stock for '{question}' — try using the full exchange ticker symbol (e.g. SBIN.NS or AAPL).",
                 "matched_pattern": "price_lookup"
             }
+            
         summary = get_cached_summary(resolved_ticker)
         if not summary:
             return {
@@ -62,7 +111,10 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
         }
 
     # 2. News Intent
-    elif any(k in q_lower for k in ["news", "headline", "latest", "article", "update"]):
+    elif is_news:
+        raw_target = extract_target_from_question(question, "news") or question
+        resolved_ticker = resolve_ticker(raw_target)
+
         if not resolved_ticker:
             return {
                 "intent": "news",
@@ -71,6 +123,7 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
                 "answer": f"Couldn't identify a matching stock for '{question}' — try using the full exchange ticker symbol (e.g. SBIN.NS or AAPL).",
                 "matched_pattern": "news_lookup"
             }
+            
         news = get_cached_news(resolved_ticker)
         if not news:
             return {
@@ -94,7 +147,10 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
         }
 
     # 3. Sentiment Intent
-    elif any(k in q_lower for k in ["sentiment", "bullish", "bearish", "predict", "lean", "model", "forecast"]):
+    elif is_sentiment:
+        raw_target = extract_target_from_question(question, "sentiment") or question
+        resolved_ticker = resolve_ticker(raw_target)
+
         if not resolved_ticker:
             return {
                 "intent": "sentiment",
@@ -103,6 +159,7 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
                 "answer": f"Couldn't identify a matching stock for '{question}' — try using the full exchange ticker symbol (e.g. SBIN.NS or AAPL).",
                 "matched_pattern": "sentiment_lookup"
             }
+            
         news = get_cached_news(resolved_ticker)
         sentiment_res = predict_stock_sentiment(resolved_ticker, news)
         
@@ -125,13 +182,14 @@ def process_qa_query(body: QueryRequest, auth_user: Dict[str, Any] = Depends(ver
 
     # 4. Help / Fallback Intent
     else:
+        resolved_ticker = resolve_ticker(question)
         answer = (
             "### Rule-Based Intent Matcher\n"
             "This assistant uses keyword pattern matching (not a free-form LLM chatbot).\n\n"
             "**Supported Question Formats:**\n"
-            "1. **Price Quote:** `price of AAPL`, `sbi stock price`, `what is reliance trading at`\n"
+            "1. **Price Quote:** `price of sbi`, `sbi price`, `what is reliance trading at`\n"
             "2. **Stock News:** `news on MSFT`, `latest headlines for NVDA`\n"
-            "3. **Model Sentiment:** `sentiment on AMZN`, `is META bullish?`\n\n"
+            "3. **Model Sentiment:** `sentiment for AMZN`, `is META bullish?`\n\n"
             "**Examples:** SBIN.NS (SBI), RELIANCE.NS, AAPL, TSLA"
         )
         return {

@@ -1,25 +1,35 @@
-<div class="screener-view">
+<div class="screener-view"
+     hx-post="/partials/screener"
+     hx-trigger="every 10s"
+     hx-target="#screener-view-area"
+     hx-swap="innerHTML">
   
-  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-    <div style="font-weight: 700; font-size: 15px;">Watchlist Signal Screener</div>
-    <span style="font-size: 10px; font-weight: 700; background: rgba(99, 102, 241, 0.2); color: #a5b4fc; padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.4);">
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="font-family: var(--font-heading); font-weight: 800; font-size: 16px;">Watchlist Signal Screener</div>
+      <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; color: #00E5FF; background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.35); padding: 2px 8px; border-radius: 9999px; box-shadow: 0 0 8px rgba(0, 229, 255, 0.2);">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #00E5FF; animation: radarDotPulse 1.2s infinite;"></span>
+        10s Live Sync
+      </span>
+    </div>
+    <span style="font-size: 10px; font-weight: 700; background: rgba(139, 92, 246, 0.2); color: #c084fc; padding: 4px 12px; border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.4); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);">
       Signal Ranking — not a recommendation
     </span>
   </div>
 
-  <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
-    Ranked strictly by statistical composite indicator scores (Headline Sentiment, 20d Return, Moving Averages, Volume Trend). This reflects relative signal strength only — <strong>NOT investment advice or trading recommendations</strong>.
+  <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
+    Ranked strictly by statistical composite indicator scores (Headline Sentiment, 20d Return, Moving Averages, Volume Trend). Scores refresh automatically every 10 seconds — <strong>NOT investment advice or trading recommendations</strong>.
   </p>
 
   {% if rankings %}
-    <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
       {% for item in rankings %}
         {% set card_data = item %}
         {% include "partials/stock_card.html" %}
       {% endfor %}
     </div>
   {% else %}
-    <div class="card" style="text-align: center; padding: 20px; color: var(--text-muted);">
+    <div class="card" style="text-align: center; padding: 24px; color: var(--text-muted);">
       No ticker signals loaded. Use search bar to query stocks.
     </div>
   {% endif %}

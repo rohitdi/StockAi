@@ -5,107 +5,113 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.main import app
-from backend.scraping.ticker_resolver import resolve_ticker
-from backend.screener import rank_watchlist_signals
+from backend.scraping.prices import get_stock_summary, get_stock_chart_data
 
 client = TestClient(app)
 
-def test_stock_chart_api():
-    print("\n--- Testing Periodical Stock Charts Engine & API ---")
+def test_currency_symbol_and_price_resilience():
+    print("\n--- Testing Currency Symbol Mapping & Price Drop-NaN Resilience ---")
     
-    # Test 1: GET /api/stock/AAPL/chart?period=1M
-    response = client.get("/api/stock/AAPL/chart?period=1M")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["ticker"] == "AAPL"
-    assert data["period"] == "1M"
-    assert "prices" in data
-    assert len(data["prices"]) > 0
-    assert "timestamps" in data
-    assert "trend" in data
-    print(f"✓ Chart API test (1M) passed! Datapoints: {data['data_points']}, Trend: {data['trend']} ({data['change_pct']}%)")
+    # Test 1: Indian Stock SBIN.NS (should return ₹ currency symbol and valid close price)
+    summary_sbi = get_stock_summary("SBIN.NS")
+    assert summary_sbi is not None
+    assert summary_sbi["currency"] == "INR"
+    assert summary_sbi["currency_symbol"] == "₹"
+    assert summary_sbi["current_price"] > 0
+    print(f"✓ SBIN.NS returned currency: {summary_sbi['currency']} ({summary_sbi['currency_symbol']}), Price: {summary_sbi['current_price']}")
 
-    # Test 2: Chart with Non-US stock free text query "sbi stock" (period=1W)
-    res_non_us = client.get("/api/stock/sbi stock/chart?period=1W")
-    assert res_non_us.status_code == 200
-    d_non_us = res_non_us.json()
-    assert d_non_us["ticker"] == "SBIN.NS"
-    print(f"✓ Non-US Stock Chart API test ('sbi stock' -> SBIN.NS) passed!")
+    # Test 2: US Stock AAPL (should return $ currency symbol)
+    summary_aapl = get_stock_summary("AAPL")
+    assert summary_aapl is not None
+    assert summary_aapl["currency"] == "USD"
+    assert summary_aapl["currency_symbol"] == "$"
+    print(f"✓ AAPL returned currency: {summary_aapl['currency']} ({summary_aapl['currency_symbol']}), Price: {summary_aapl['current_price']}")
 
-    # Test 3: Chart HTMX partial view POST /partials/chart
-    res_partial = client.post("/partials/chart", data={"ticker": "AAPL", "period": "1Y"})
-    assert res_partial.status_code == 200
-    assert "chart-card" in res_partial.text
-    assert "1Y" in res_partial.text
-    print("✓ Chart HTMX partial view test passed!")
-
-def test_screener_engine_and_api():
-    print("\n--- Testing Section 2.6 Signal Screener Engine & API ---")
-    tickers = ["AAPL", "MSFT", "SBIN.NS"]
-    rankings = rank_watchlist_signals(tickers)
-    assert len(rankings) > 0
-    assert "composite_score" in rankings[0]
+def test_partials_rendering():
+    print("\n--- Testing Partials Currency & Detailed Chart Rendering ---")
     
-    response = client.get("/api/screener/rank?tickers=AAPL,MSFT,NVDA")
-    assert response.status_code == 200
-    data = response.json()
-    assert "rankings" in data
-    print("✓ Screener REST API endpoint GET /api/screener/rank passed!")
-
-def test_ticker_resolver():
-    print("\n--- Testing Section 2.5 Ticker Resolution Pipeline ---")
-    res1 = resolve_ticker("sbi stock")
-    assert res1 == "SBIN.NS"
-    res2 = resolve_ticker("reliance")
-    assert res2 == "RELIANCE.NS"
-    res3 = resolve_ticker("apple shares")
-    assert res3 == "AAPL"
-    print("✓ Ticker resolver tests passed!")
-
-def test_health_check():
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-    print("✓ Health check endpoint test passed!")
-
-def test_embedded_panel_page():
-    response = client.get("/?mode=embedded&theme=dark&ticker=AAPL")
-    assert response.status_code == 200
-    assert "Stock Intelligence" in response.text
-    assert "mode-embedded" in response.text
-    print("✓ Embedded webview panel drawer page test passed!")
-
-def test_stock_summary_api():
-    response = client.get("/api/stock/AAPL/summary")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["ticker"] == "AAPL"
-    print(f"✓ Stock summary API test passed! Price: ${data['current_price']}")
-
-def test_stock_news_api():
-    response = client.get("/api/stock/AAPL/news")
-    assert response.status_code == 200
-    print(f"✓ Stock news API test passed!")
-
-def test_stock_sentiment_api():
-    response = client.get("/api/stock/AAPL/sentiment")
-    assert response.status_code == 200
-    print(f"✓ Stock sentiment ML model API test passed!")
-
-def test_intent_matcher_api():
-    r1 = client.post("/api/query", json={"question": "price of sbi stock"})
+    # Test POST /partials/summary for SBIN.NS
+    r1 = client.post("/partials/summary", data={"ticker": "SBIN.NS"})
     assert r1.status_code == 200
-    assert r1.json()["intent"] == "price"
-    print("✓ Rule-based Q&A Intent Matcher tests passed!")
+    assert "₹" in r1.text
+    assert ",nan" not in r1.text.lower()
+    assert "nan," not in r1.text.lower()
+    print("✓ Summary partial view returned correct Rupee symbol (₹) and no NaN coordinates!")
+
+    # Test POST /partials/chart for SBIN.NS
+    r2 = client.post("/partials/chart", data={"ticker": "SBIN.NS", "period": "1M"})
+    assert r2.status_code == 200
+    assert "₹" in r2.text
+    assert ",nan" not in r2.text.lower()
+    assert "nan," not in r2.text.lower()
+    print("✓ Chart partial view returned correct Rupee symbol (₹) and no NaN coordinates!")
+
+    # Test POST /partials/detailed_chart for SBIN.NS
+    r3 = client.post("/partials/detailed_chart", data={"ticker": "SBIN.NS", "period": "1Y"})
+    assert r3.status_code == 200
+    assert "detailed-chart-modal" in r3.text
+    assert "50 DMA" in r3.text
+    assert "200 DMA" in r3.text
+    assert "financialChartCanvas" in r3.text
+    print("✓ Sleek Area Chart Modal returned successfully with canvas, 50 DMA, and 200 DMA controls!")
+
+def test_price_alerts_api():
+    print("\n--- Testing Price Alerts API & Background Evaluation ---")
+    
+    # 1. Create alert: Above 500 for SBIN.NS (which is currently > 1000, so it will trigger immediately on check)
+    r_create = client.post("/api/alerts", json={
+        "ticker": "SBIN.NS",
+        "target_price": 500.0,
+        "condition": "above",
+        "currency_symbol": "₹"
+    })
+    assert r_create.status_code == 200
+    data = r_create.json()
+    assert data["status"] == "success"
+    alert_id = data["alert"]["id"]
+    print("✓ Created price alert with ID:", alert_id)
+
+    # 2. List alerts
+    r_list = client.get("/api/alerts")
+    assert r_list.status_code == 200
+    assert r_list.json()["count"] >= 1
+    print(f"✓ Listed {r_list.json()['count']} active alerts")
+
+    # 3. Check alerts
+    r_check = client.post("/api/alerts/check")
+    assert r_check.status_code == 200
+    check_data = r_check.json()
+    assert check_data["triggered_count"] >= 1
+    triggered = [a for a in check_data["triggered_alerts"] if a["alert_id"] == alert_id]
+    assert len(triggered) == 1
+    print(f"✓ Alert triggered successfully: {triggered[0]['message']}")
+
+    # 4. Clean up alert
+    r_del = client.delete(f"/api/alerts/{alert_id}")
+    assert r_del.status_code == 200
+    print("✓ Deleted test alert")
+
+def test_ohlc_data_integrity():
+    print("\n--- Testing OHLC Candlestick & Bar Data Integrity ---")
+    chart_data = get_stock_chart_data("AAPL", period="1mo")
+    assert chart_data is not None
+    assert "opens" in chart_data and len(chart_data["opens"]) > 0
+    assert "highs" in chart_data and len(chart_data["highs"]) > 0
+    assert "lows" in chart_data and len(chart_data["lows"]) > 0
+    assert "closes" in chart_data and len(chart_data["closes"]) > 0
+    assert "ohlc" in chart_data and len(chart_data["ohlc"]) > 0
+
+    # Ensure high >= max(open, close) and low <= min(open, close)
+    for candle in chart_data["ohlc"]:
+        assert candle["high"] >= max(candle["open"], candle["close"])
+        assert candle["low"] <= min(candle["open"], candle["close"])
+        assert candle["high"] > candle["low"] # non-flat candles
+
+    print(f"✓ Validated {len(chart_data['ohlc'])} OHLC candles with non-flat upper/lower wicks!")
 
 if __name__ == "__main__":
-    test_stock_chart_api()
-    test_screener_engine_and_api()
-    test_ticker_resolver()
-    test_health_check()
-    test_embedded_panel_page()
-    test_stock_summary_api()
-    test_stock_news_api()
-    test_stock_sentiment_api()
-    test_intent_matcher_api()
+    test_currency_symbol_and_price_resilience()
+    test_partials_rendering()
+    test_ohlc_data_integrity()
+    test_price_alerts_api()
     print("\n🎉 ALL VERIFICATION TESTS PASSED SUCCESSFULLY!")

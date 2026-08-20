@@ -1,0 +1,649 @@
+<div id="detailed-chart-modal" class="detailed-chart-backdrop" onclick="if(event.target === this) this.remove()">
+  <div class="detailed-chart-panel" onclick="event.stopPropagation()">
+    
+    <!-- Top Action & Navigation Bar -->
+    <div class="chart-top-bar">
+      
+      <!-- Left & Center Control Group (Timeframes & Modes) -->
+      <div class="modal-controls-left-group">
+        <!-- Timeframe Selector Tabs -->
+        <div class="timeframe-group">
+          {% for p in ["1D", "1W", "1M", "1Y", "ALL"] %}
+            {% set is_act = (chart.period == p or (chart.period == '5Y' and p == 'ALL')) %}
+            <button class="tf-tab {{ 'active' if is_act else '' }}"
+                    hx-post="/partials/detailed_chart"
+                    hx-vals='{"ticker": "{{ chart.ticker }}", "period": "{{ p }}"}'
+                    hx-target="#detailed-chart-modal"
+                    hx-indicator="#modal-timeframe-spinner"
+                    hx-swap="outerHTML">
+              {{ p }}
+            </button>
+          {% endfor %}
+        </div>
+
+        <!-- Chart View Mode Segmented Switcher (Candlestick / OHLC Bar / Area) -->
+        <div class="chart-mode-group">
+          <button class="mode-tab active" id="mode-btn-candle" onclick="window.setChartViewMode('candle')" title="Candlestick View">
+            🕯️ Candles
+          </button>
+          <button class="mode-tab" id="mode-btn-ohlc" onclick="window.setChartViewMode('ohlc')" title="OHLC Bar View">
+            📊 OHLC
+          </button>
+          <button class="mode-tab" id="mode-btn-area" onclick="window.setChartViewMode('area')" title="Area / Line View">
+            📈 Area
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Metric Tabs & Alerts & Close Button -->
+      <div class="top-right-actions">
+        <div class="metric-tabs">
+          <button class="metric-tab active" id="btn-mode-price" onclick="window.switchChartMetric('price')">Price</button>
+          <button class="metric-tab" id="btn-mode-pe" onclick="window.switchChartMetric('pe')">PE</button>
+          
+          <div class="dropdown-wrapper" style="position: relative; display: inline-block;">
+            <button class="metric-tab" id="btn-mode-more" onclick="window.toggleMoreDropdown(event)">More ▾</button>
+            <div id="more-metric-dropdown" class="metric-dropdown-menu">
+              <button class="dropdown-item" onclick="window.switchChartMetric('mcap')">🏢 Market Cap Trend</button>
+              <button class="dropdown-item" onclick="window.toggleTechnicalIndicators()">📐 Toggle 50/200 DMA</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" onclick="window.resetChartZoom()">🔄 Reset Zoom</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="alerts-btn" onclick="window.toggleAlertModal()">
+          <span>🔔</span> Alerts
+        </button>
+        
+        <button class="modal-close-icon-btn" onclick="document.getElementById('detailed-chart-modal').remove()" title="Close Detailed View">
+          ✕
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Real-time OHLC Live Header Bar on Hover -->
+    <div id="live-ohlc-header" class="modal-live-ohlc-header">
+      <div id="ohlc-strip" class="modal-ohlc-strip">
+        <span><strong>{{ ticker }}</strong> ({{ chart.period }})</span>
+        <span>O: <strong id="ohlc-open" style="color: #f8fafc;">{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.opens[-1] if chart.opens else chart.end_price }}</strong></span>
+        <span>H: <strong id="ohlc-high" style="color: #22c55e;">{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.highs[-1] if chart.highs else chart.high }}</strong></span>
+        <span>L: <strong id="ohlc-low" style="color: #ef4444;">{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.lows[-1] if chart.lows else chart.low }}</strong></span>
+        <span>C: <strong id="ohlc-close" style="color: #f8fafc;">{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}{{ chart.end_price }}</strong></span>
+        <span>Chg: <strong id="ohlc-change" style="color: {{ '#22c55e' if chart.trend == 'up' else '#ef4444' }};">{{ '▲ +' if chart.trend == 'up' else '▼ ' }}{{ chart.change_pct }}%</strong></span>
+      </div>
+      <div id="ohlc-date-indicator" style="font-size: 11px; color: var(--text-secondary); white-space: nowrap;">
+        {{ chart.timestamps[-1] if chart.timestamps else '' }}
+      </div>
+    </div>
+
+    <!-- Main Chart Canvas Viewport -->
+    <div class="chart-viewport-wrapper" style="height: 420px; position: relative; padding: 0; background: #131722; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; overflow: hidden;">
+      <!-- Modal Timeframe Loading Skeleton & Shimmer -->
+      <div id="modal-timeframe-spinner" class="htmx-indicator chart-skeleton-container">
+        <!-- Dummy Skeleton Grid & Wave Path -->
+        <svg width="100%" height="100%" viewBox="0 0 700 420" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0; opacity: 0.3;">
+          <line x1="0" y1="80" x2="700" y2="80" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4"/>
+          <line x1="0" y1="180" x2="700" y2="180" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4"/>
+          <line x1="0" y1="280" x2="700" y2="280" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4,4"/>
+          <path d="M 0,320 C 150,150 300,340 450,180 S 600,240 700,100 L 700,420 L 0,420 Z" fill="rgba(0, 229, 255, 0.05)"/>
+          <path d="M 0,320 C 150,150 300,340 450,180 S 600,240 700,100" fill="none" stroke="rgba(0, 229, 255, 0.35)" stroke-width="2.5" stroke-dasharray="8,6"/>
+        </svg>
+
+        <!-- Horizontal Wave Shimmer Effect -->
+        <div class="skeleton-shimmer-layer"></div>
+
+        <!-- Centered Glassmorphic Loader Pill -->
+        <div class="chart-glass-loader-badge">
+          <div class="radar-dot"></div>
+          <div class="loader-text-badge">Updating {{ chart.ticker }} Chart...</div>
+        </div>
+      </div>
+      <canvas id="financialChartCanvas" style="width: 100%; height: 100%; display: block; cursor: crosshair;"></canvas>
+    </div>
+
+    <!-- Bottom Series Checkbox Controls -->
+    <div class="chart-bottom-controls" id="chart-checkbox-controls">
+      <label class="custom-checkbox-label">
+        <input type="checkbox" id="toggle-price" checked onchange="window.redrawCustomChart()">
+        <span class="checkmark price-check"></span>
+        <span class="label-text" id="label-primary-series">Price on {{ 'NSE' if '.NS' in ticker else 'Market' }}</span>
+      </label>
+
+      <label class="custom-checkbox-label" id="wrapper-toggle-50dma">
+        <input type="checkbox" id="toggle-50dma" onchange="window.redrawCustomChart()">
+        <span class="checkmark dma50-check"></span>
+        <span class="label-text">50 DMA</span>
+      </label>
+
+      <label class="custom-checkbox-label" id="wrapper-toggle-200dma">
+        <input type="checkbox" id="toggle-200dma" onchange="window.redrawCustomChart()">
+        <span class="checkmark dma200-check"></span>
+        <span class="label-text">200 DMA</span>
+      </label>
+    </div>
+
+    <!-- Alert Configuration Sub-Modal -->
+    <div id="alert-config-dialog" class="alert-dialog-card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <strong style="font-size: 14px; color: #fff;">🔔 Set Price Alert for {{ ticker }}</strong>
+        <button onclick="window.toggleAlertModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">✕</button>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
+        <select id="alert-condition" class="qa-input" style="flex: 1; padding: 8px 10px;">
+          <option value="above">Price rises above</option>
+          <option value="below">Price falls below</option>
+        </select>
+        <div style="display: flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0 10px;">
+          <span style="color: var(--text-muted); font-size: 12px; margin-right: 4px;">{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}</span>
+          <input type="number" id="alert-price" class="qa-input" style="border: none; padding: 8px 0; width: 80px;" value="{{ chart.end_price }}">
+        </div>
+        <button class="search-btn" style="padding: 8px 16px; font-size: 12px;" onclick="window.savePriceAlert()">Set Alert</button>
+      </div>
+      <div id="alert-toast-message" style="display: none; font-size: 12px; color: var(--bullish-green); font-weight: 600;"></div>
+    </div>
+
+  </div>
+
+  <script>
+    (function() {
+      let viewMode = 'candle'; // 'candle' | 'ohlc' | 'area'
+      let currentMetric = 'price'; // 'price' | 'pe' | 'mcap'
+
+      const timestamps = {{ (chart.timestamps if chart else []) | tojson }};
+      const opens = {{ (chart.opens if chart and chart.opens else chart.prices) | tojson }};
+      const highs = {{ (chart.highs if chart and chart.highs else chart.prices) | tojson }};
+      const lows = {{ (chart.lows if chart and chart.lows else chart.prices) | tojson }};
+      const closes = {{ (chart.closes if chart and chart.closes else chart.prices) | tojson }};
+      const dma50 = {{ (chart.dma_50 if chart and chart.dma_50 else []) | tojson }};
+      const dma200 = {{ (chart.dma_200 if chart and chart.dma_200 else []) | tojson }};
+      const peRatios = {{ (chart.pe_ratios if chart and chart.pe_ratios else []) | tojson }};
+      const marketCaps = {{ (chart.market_caps if chart and chart.market_caps else []) | tojson }};
+      const currencySymbol = "{{ summary.currency_symbol if summary and summary.currency_symbol else '$' }}";
+      const exchangeName = "{{ 'NSE' if '.NS' in ticker else 'Market' }}";
+      const startPrice = {{ (chart.start_price if chart and chart.start_price else 1.0) | tojson }};
+
+      let hoverIndex = -1;
+      let mouseX = -1;
+      let mouseY = -1;
+
+      const canvas = document.getElementById('financialChartCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.resetTransform();
+        ctx.scale(dpr, dpr);
+        drawChart();
+      }
+
+      function drawChart() {
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        if (!width || !height || !closes.length) return;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const padLeft = 16;
+        const padRight = 65; // for right Y-axis
+        const padTop = 20;
+        const padBottom = 30; // for bottom X-axis
+        const plotW = width - padLeft - padRight;
+        const plotH = height - padTop - padBottom;
+
+        // Choose active dataset
+        let primaryData = closes;
+        let dataHighs = highs;
+        let dataLows = lows;
+        let dataOpens = opens;
+
+        if (currentMetric === 'pe') {
+          primaryData = peRatios;
+          dataHighs = peRatios;
+          dataLows = peRatios;
+          dataOpens = peRatios;
+        } else if (currentMetric === 'mcap') {
+          primaryData = marketCaps;
+          dataHighs = marketCaps;
+          dataLows = marketCaps;
+          dataOpens = marketCaps;
+        }
+
+        // Dynamic Min/Max with 5% margin
+        let minVal = Math.min(...dataLows.filter(v => v !== null && !isNaN(v)));
+        let maxVal = Math.max(...dataHighs.filter(v => v !== null && !isNaN(v)));
+        
+        // Include DMA in scale if enabled
+        const show50 = document.getElementById('toggle-50dma') && document.getElementById('toggle-50dma').checked && currentMetric === 'price';
+        const show200 = document.getElementById('toggle-200dma') && document.getElementById('toggle-200dma').checked && currentMetric === 'price';
+
+        if (show50) {
+          dma50.forEach(v => { if (v) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } });
+        }
+        if (show200) {
+          dma200.forEach(v => { if (v) { minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v); } });
+        }
+
+        const diff = maxVal - minVal;
+        const buffer = diff > 0 ? diff * 0.05 : maxVal * 0.03;
+        const yMin = Math.max(0, minVal - buffer);
+        const yMax = maxVal + buffer;
+        const yRange = (yMax - yMin) || 1.0;
+
+        function getY(val) {
+          return padTop + plotH - ((val - yMin) / yRange) * plotH;
+        }
+
+        function getX(i) {
+          return padLeft + (i / (closes.length - 1 || 1)) * plotW;
+        }
+
+        // 1. Background Grid Lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+
+        const ySteps = 5;
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        for (let i = 0; i <= ySteps; i++) {
+          const val = yMin + (i / ySteps) * (yMax - yMin);
+          const y = getY(val);
+          
+          ctx.beginPath();
+          ctx.moveTo(padLeft, y);
+          ctx.lineTo(width - padRight, y);
+          ctx.stroke();
+
+          // Y-axis labels on Right
+          let text = currencySymbol + val.toFixed(1);
+          if (currentMetric === 'pe') text = val.toFixed(1) + 'x';
+          if (currentMetric === 'mcap') text = currencySymbol + val.toFixed(0) + 'B';
+          ctx.fillText(text, width - padRight + 10, y);
+        }
+
+        // X-axis Date Labels
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const xStepCount = Math.min(6, timestamps.length);
+        for (let s = 0; s < xStepCount; s++) {
+          const idx = Math.floor(s * (timestamps.length - 1) / (xStepCount - 1 || 1));
+          const x = getX(idx);
+          
+          ctx.beginPath();
+          ctx.moveTo(x, padTop + plotH);
+          ctx.lineTo(x, padTop + plotH + 5);
+          ctx.stroke();
+
+          ctx.fillText(timestamps[idx], x, padTop + plotH + 8);
+        }
+
+        // 2. Draw 50 DMA & 200 DMA Lines
+        if (show50 && dma50.length) {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < dma50.length; i++) {
+            if (dma50[i]) {
+              const x = getX(i);
+              const y = getY(dma50[i]);
+              if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+            }
+          }
+          ctx.stroke();
+        }
+
+        if (show200 && dma200.length) {
+          ctx.strokeStyle = '#ec4899';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < dma200.length; i++) {
+            if (dma200[i]) {
+              const x = getX(i);
+              const y = getY(dma200[i]);
+              if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+            }
+          }
+          ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+
+        // 3. Draw Chart according to ViewMode
+        const bullColor = '#22c55e'; // Vibrant Bullish Green
+        const bearColor = '#ef4444'; // Vibrant Bearish Crimson Red
+
+        const n = closes.length;
+        const candleSpacing = plotW / (n || 1);
+        const candleWidth = Math.max(3.5, Math.min(16, candleSpacing * 0.72));
+
+        if (viewMode === 'candle' && currentMetric === 'price') {
+          // Candlestick Rendering
+          for (let i = 0; i < n; i++) {
+            const x = getX(i);
+            const o = opens[i];
+            const h = highs[i];
+            const l = lows[i];
+            const c = closes[i];
+            const isBull = c >= o;
+            const color = isBull ? bullColor : bearColor;
+
+            const yOpen = getY(o);
+            const yClose = getY(c);
+            const yHigh = getY(h);
+            const yLow = getY(l);
+
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 1.5;
+
+            // 1. Upper & Lower Wick Line
+            ctx.beginPath();
+            ctx.moveTo(x, yHigh);
+            ctx.lineTo(x, yLow);
+            ctx.stroke();
+
+            // 2. Real Candle Body Rectangle
+            const bodyTop = Math.min(yOpen, yClose);
+            const bodyH = Math.max(3, Math.abs(yClose - yOpen));
+            ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyH);
+            
+            // Subtle body border for extra definition
+            ctx.strokeStyle = isBull ? '#4ade80' : '#f87171';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - candleWidth / 2, bodyTop, candleWidth, bodyH);
+          }
+        } else if (viewMode === 'ohlc' && currentMetric === 'price') {
+          // OHLC Bar Rendering
+          const tickLen = Math.max(3, candleWidth * 0.65);
+          for (let i = 0; i < n; i++) {
+            const x = getX(i);
+            const o = opens[i];
+            const h = highs[i];
+            const l = lows[i];
+            const c = closes[i];
+            const isBull = c >= o;
+            const color = isBull ? bullColor : bearColor;
+
+            const yOpen = getY(o);
+            const yClose = getY(c);
+            const yHigh = getY(h);
+            const yLow = getY(l);
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.8;
+
+            // Vertical High to Low Stem
+            ctx.beginPath();
+            ctx.moveTo(x, yHigh);
+            ctx.lineTo(x, yLow);
+            ctx.stroke();
+
+            // Left Open Tick
+            ctx.beginPath();
+            ctx.moveTo(x - tickLen, yOpen);
+            ctx.lineTo(x, yOpen);
+            ctx.stroke();
+
+            // Right Close Tick
+            ctx.beginPath();
+            ctx.moveTo(x, yClose);
+            ctx.lineTo(x + tickLen, yClose);
+            ctx.stroke();
+          }
+        } else {
+          // Sleek Area / Line Rendering (Neon Cyan Gradient)
+          const primaryColor = currentMetric === 'pe' ? '#10b981' : (currentMetric === 'mcap' ? '#a855f7' : '#00e5ff');
+          
+          const grad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
+          grad.addColorStop(0, primaryColor + '45');
+          grad.addColorStop(0.7, primaryColor + '0d');
+          grad.addColorStop(1, primaryColor + '00');
+
+          ctx.beginPath();
+          ctx.moveTo(getX(0), getY(primaryData[0]));
+          for (let i = 1; i < n; i++) {
+            ctx.lineTo(getX(i), getY(primaryData[i]));
+          }
+
+          // Complete Area Path
+          ctx.lineTo(getX(n - 1), padTop + plotH);
+          ctx.lineTo(getX(0), padTop + plotH);
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          // Stroke Line
+          ctx.beginPath();
+          ctx.moveTo(getX(0), getY(primaryData[0]));
+          for (let i = 1; i < n; i++) {
+            ctx.lineTo(getX(i), getY(primaryData[i]));
+          }
+          ctx.strokeStyle = primaryColor;
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+        }
+
+        // 4. Hover Crosshairs & Active Point Node
+        if (hoverIndex >= 0 && hoverIndex < n && mouseX >= padLeft && mouseX <= width - padRight) {
+          const hX = getX(hoverIndex);
+          const hY = getY(closes[hoverIndex]);
+
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+
+          // Vertical crosshair
+          ctx.beginPath();
+          ctx.moveTo(hX, padTop);
+          ctx.lineTo(hX, padTop + plotH);
+          ctx.stroke();
+
+          // Horizontal crosshair
+          ctx.beginPath();
+          ctx.moveTo(padLeft, hY);
+          ctx.lineTo(width - padRight, hY);
+          ctx.stroke();
+
+          ctx.setLineDash([]);
+
+          // Glowing Node Circle
+          ctx.fillStyle = '#00e5ff';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(hX, hY, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Price Tag on Right Axis
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(width - padRight + 4, hY - 10, 56, 20);
+          ctx.strokeStyle = '#00e5ff';
+          ctx.strokeRect(width - padRight + 4, hY - 10, 56, 20);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '10px Inter, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(currencySymbol + closes[hoverIndex].toFixed(1), width - padRight + 8, hY);
+        }
+      }
+
+      // Mouse Move Event Listener
+      canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+
+        const padLeft = 16;
+        const padRight = 65;
+        const plotW = rect.width - padLeft - padRight;
+        const n = closes.length;
+
+        if (mouseX >= padLeft && mouseX <= rect.width - padRight && n > 0) {
+          const ratio = (mouseX - padLeft) / plotW;
+          hoverIndex = Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1))));
+          
+          // Update Header OHLC Strip
+          const o = opens[hoverIndex];
+          const h = highs[hoverIndex];
+          const l = lows[hoverIndex];
+          const c = closes[hoverIndex];
+          const chg = (((c - (hoverIndex > 0 ? closes[hoverIndex - 1] : o)) / (hoverIndex > 0 ? closes[hoverIndex - 1] : o)) * 100).toFixed(2);
+          const isUp = chg >= 0;
+
+          document.getElementById('ohlc-open').innerText = currencySymbol + o;
+          document.getElementById('ohlc-high').innerText = currencySymbol + h;
+          document.getElementById('ohlc-low').innerText = currencySymbol + l;
+          document.getElementById('ohlc-close').innerText = currencySymbol + c;
+          
+          const chgEl = document.getElementById('ohlc-change');
+          chgEl.innerText = (isUp ? '▲ +' : '▼ ') + chg + '%';
+          chgEl.style.color = isUp ? '#22c55e' : '#ef4444';
+
+          document.getElementById('ohlc-date-indicator').innerText = timestamps[hoverIndex];
+        } else {
+          hoverIndex = -1;
+        }
+
+        drawChart();
+      });
+
+      canvas.addEventListener('mouseleave', function() {
+        hoverIndex = -1;
+        drawChart();
+      });
+
+      window.setChartViewMode = function(mode) {
+        viewMode = mode;
+        document.getElementById('mode-btn-candle').classList.remove('active');
+        document.getElementById('mode-btn-ohlc').classList.remove('active');
+        document.getElementById('mode-btn-area').classList.remove('active');
+
+        if (mode === 'candle') document.getElementById('mode-btn-candle').classList.add('active');
+        if (mode === 'ohlc') document.getElementById('mode-btn-ohlc').classList.add('active');
+        if (mode === 'area') document.getElementById('mode-btn-area').classList.add('active');
+
+        drawChart();
+      };
+
+      window.switchChartMetric = function(metric) {
+        currentMetric = metric;
+        document.getElementById('btn-mode-price').classList.remove('active');
+        document.getElementById('btn-mode-pe').classList.remove('active');
+        document.getElementById('btn-mode-more').classList.remove('active');
+        document.getElementById('more-metric-dropdown').classList.remove('show');
+
+        if (metric === 'price') {
+          document.getElementById('btn-mode-price').classList.add('active');
+        } else if (metric === 'pe') {
+          document.getElementById('btn-mode-pe').classList.add('active');
+        } else if (metric === 'mcap') {
+          document.getElementById('btn-mode-more').classList.add('active');
+        }
+
+        drawChart();
+      };
+
+      window.redrawCustomChart = function() {
+        drawChart();
+      };
+
+      window.toggleTechnicalIndicators = function() {
+        const t50 = document.getElementById('toggle-50dma');
+        const t200 = document.getElementById('toggle-200dma');
+        const next = !t50.checked;
+        t50.checked = next;
+        t200.checked = next;
+        drawChart();
+      };
+
+      window.toggleMoreDropdown = function(e) {
+        e.stopPropagation();
+        document.getElementById('more-metric-dropdown').classList.toggle('show');
+      };
+
+      document.addEventListener('click', () => {
+        const m = document.getElementById('more-metric-dropdown');
+        if (m) m.classList.remove('show');
+      });
+
+      window.resetChartZoom = function() {
+        drawChart();
+      };
+
+      // Alerts
+      window.toggleAlertModal = function() {
+        const d = document.getElementById('alert-config-dialog');
+        d.style.display = (d.style.display === 'none' || !d.style.display) ? 'block' : 'none';
+      };
+
+      window.savePriceAlert = async function() {
+        const price = document.getElementById('alert-price').value;
+        const cond = document.getElementById('alert-condition').value;
+        const toast = document.getElementById('alert-toast-message');
+        
+        if (window.requestMobileNotificationPermission) {
+          await window.requestMobileNotificationPermission();
+        }
+
+        try {
+          await fetch('/api/alerts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticker: '{{ ticker }}',
+              target_price: parseFloat(price),
+              condition: cond,
+              currency_symbol: currencySymbol
+            })
+          });
+        } catch (e) {}
+
+        if (window.emitHostEvent) {
+          window.emitHostEvent('stock-module:alert-created', {
+            ticker: '{{ ticker }}',
+            target_price: parseFloat(price),
+            condition: cond,
+            currency_symbol: currencySymbol,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        toast.innerHTML = '✓ Alert active! Native cross-tab & audio notifications enabled for <strong>{{ ticker }}</strong>.';
+        toast.style.display = 'block';
+        setTimeout(() => {
+          window.toggleAlertModal();
+          toast.style.display = 'none';
+        }, 2500);
+      };
+
+      // Resize Listener
+      window.addEventListener('resize', resizeCanvas);
+      setTimeout(resizeCanvas, 30);
+
+      // Escape key to close modal
+      const escListener = function(e) {
+        if (e.key === 'Escape') {
+          const modal = document.getElementById('detailed-chart-modal');
+          if (modal) modal.remove();
+          document.removeEventListener('keydown', escListener);
+          window.removeEventListener('resize', resizeCanvas);
+        }
+      };
+      document.addEventListener('keydown', escListener);
+    })();
+  </script>
+</div>

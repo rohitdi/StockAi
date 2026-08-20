@@ -1,6 +1,6 @@
-<div class="card" style="margin-top: 16px;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Self-Trained Model Signal</span>
+<div class="card" style="margin-top: 18px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Self-Trained Model Signal</span>
     <span style="font-size: 11px; color: var(--text-muted);">TF-IDF + Scikit-Learn</span>
   </div>
 
@@ -15,11 +15,11 @@
     • {{ (sentiment.confidence * 100)|int }}% Confidence
   </div>
 
-  <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
+  <div style="font-family: var(--font-heading); font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
     {{ sentiment.summary_text }}
   </div>
 
-  <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; background: rgba(0,0,0,0.2); padding: 8px; border-radius: var(--radius-sm);">
+  <div style="font-size: 11px; color: var(--text-muted); line-height: 1.45; background: rgba(0,0,0,0.25); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
     ℹ️ <em>{{ sentiment.disclaimer }}</em>
   </div>
 </div>
