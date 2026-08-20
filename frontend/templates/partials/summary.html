@@ -1,0 +1,83 @@
+{% if summary %}
+<div class="card">
+  <div class="ticker-header">
+    <div>
+      <div class="company-name">{{ summary.company_name }}</div>
+      <div style="font-size: 12px; color: var(--text-muted);">{{ summary.ticker }} • {{ summary.currency }}</div>
+    </div>
+    <div style="text-align: right;">
+      <div class="stock-price">${{ "%.2f"|format(summary.current_price) }}</div>
+      <div>
+        {% if summary.change_pct >= 0 %}
+          <span class="price-pct up">+{{ summary.change_pct }}%</span>
+        {% else %}
+          <span class="price-pct down">{{ summary.change_pct }}%</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-item">
+      <span class="metric-label">Previous Close</span>
+      <span class="metric-value">${{ "%.2f"|format(summary.previous_close) }}</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">52-Wk Range</span>
+      <span class="metric-value">${{ summary.fifty_two_low }} - ${{ summary.fifty_two_high }}</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">Volume</span>
+      <span class="metric-value">{{ "{:,}".format(summary.volume) }}</span>
+    </div>
+    <div class="metric-item">
+      <span class="metric-label">P/E Ratio</span>
+      <span class="metric-value">{{ summary.pe_ratio if summary.pe_ratio else 'N/A' }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Periodical Stock Chart Component -->
+<div id="chart-container-area">
+  {% if chart %}
+    {% include "partials/stock_chart.html" %}
+  {% endif %}
+</div>
+
+<!-- Sentiment Analysis Card -->
+{% if sentiment %}
+  {% include "partials/sentiment.html" %}
+{% endif %}
+
+<!-- News Card -->
+<div class="card" style="margin-top: 16px;">
+  <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">
+    Scraped Google News Headlines
+  </div>
+  {% if news %}
+    <div class="headlines-list">
+      {% for item in news[:6] %}
+        <a href="{{ item.link }}" target="_blank" class="headline-item">
+          <div class="headline-title">{{ item.title }}</div>
+          <div class="headline-meta">
+            <span>{{ item.source }}</span>
+            <span>{{ item.published_at[:16] if item.published_at else '' }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p style="font-size: 12px; color: var(--text-muted); font-style: italic;">
+      No headlines found for ticker {{ summary.ticker }}.
+    </p>
+  {% endif %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 24px;">
+  <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+  <div style="font-weight: 700; color: var(--bearish-red);">Stock Symbol Not Identified</div>
+  <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">
+    Couldn't identify a matching stock for '<strong>{{ raw_ticker if raw_ticker else ticker }}</strong>' — try using the full exchange ticker symbol (e.g. <code>SBIN.NS</code> or <code>AAPL</code>).
+  </p>
+</div>
+{% endif %}

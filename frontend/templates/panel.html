@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Research Module</title>
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- HTMX Library for dynamic updates without full reloads -->
+  <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+  
+  <!-- Module Stylesheet -->
+  <link rel="stylesheet" href="/static/css/panel.css">
+</head>
+<body>
+  <div class="module-container mode-{{ mode }}">
+    
+    <!-- Sticky Header -->
+    <header class="panel-header">
+      <div class="brand">
+        <div class="brand-icon">📈</div>
+        <div class="brand-title">Stock Intelligence</div>
+      </div>
+      <button class="close-btn" onclick="closePanel()" title="Close Research Drawer">✕</button>
+    </header>
+
+    <!-- Mandatory Honesty Disclaimer Banner -->
+    <div class="disclaimer-banner">
+      <span class="disclaimer-icon">⚠️</span>
+      <div>
+        <strong>Self-Hosted AI Model:</strong> Sentiment prediction uses a simple scikit-learn model on headline text. This is an educational tool, NOT financial advice.
+      </div>
+    </div>
+
+    <!-- Ticker Search Section -->
+    <div class="search-section">
+      <form class="search-form" 
+            hx-post="/partials/summary" 
+            hx-target="#stock-display-area" 
+            hx-indicator="#search-spinner">
+        <input type="text" 
+               name="ticker" 
+               class="search-input" 
+               placeholder="Search stock symbol or name (e.g. AAPL, sbi stock, reliance)" 
+               value="{{ raw_ticker if raw_ticker else ticker }}" 
+               required 
+               autocomplete="off">
+        <button type="submit" class="search-btn">
+          Search
+        </button>
+      </form>
+      <div id="search-spinner" class="htmx-indicator" style="margin-top: 6px;">
+        Fetching live market data & Headlines...
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="padding: 0 18px 10px; display: flex; gap: 8px;">
+      <button class="search-btn" style="flex: 1; padding: 6px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);"
+              onclick="document.getElementById('stock-research-view').style.display='block'; document.getElementById('screener-view-area').style.display='none';">
+        📈 Research & Q&A
+      </button>
+      <button class="search-btn" style="flex: 1; padding: 6px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);"
+              hx-post="/partials/screener"
+              hx-target="#screener-view-area"
+              onclick="document.getElementById('stock-research-view').style.display='none'; document.getElementById('screener-view-area').style.display='block';">
+        📊 Signal Screener
+      </button>
+    </div>
+
+    <!-- Content Area (Stock Summary & Research) -->
+    <main class="content-area">
+      
+      <!-- Tab 1: Stock Research View -->
+      <div id="stock-research-view">
+        <div id="stock-display-area">
+          {% include "partials/summary.html" %}
+        </div>
+
+        <!-- Rule-Based Q&A Box -->
+        <div class="card qa-card" style="margin-top: 16px;">
+          <div class="qa-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 14px;">Stock Q&A Assistant</strong>
+              <span class="qa-badge">Rule-Based Matcher</span>
+            </div>
+          </div>
+
+          <p style="font-size: 11px; color: var(--text-muted);">
+            Note: Answers are pattern-matched against pre-configured rules (no LLM).
+          </p>
+
+          <form class="qa-form" 
+                hx-post="/partials/qa_response" 
+                hx-target="#qa-result" 
+                hx-indicator="#qa-spinner">
+            <input type="hidden" name="ticker" value="{{ ticker }}">
+            <input type="text" 
+                   name="question" 
+                   class="qa-input" 
+                   placeholder="Try: 'price of AAPL', 'news on TSLA', 'sentiment for NVDA'" 
+                   required 
+                   autocomplete="off">
+            <button type="submit" class="search-btn qa-btn" style="padding: 0 12px; font-size: 12px;">
+              Ask
+            </button>
+          </form>
+
+          <div id="qa-spinner" class="htmx-indicator">
+            Matching query pattern...
+          </div>
+
+          <div id="qa-result" class="qa-output">
+            <div style="color: var(--text-muted); font-size: 12px;">
+              Ask a stock question above or click a suggested prompt:
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='price of {{ ticker }}'">Price of {{ ticker }}</button>
+                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='news on {{ ticker }}'">News on {{ ticker }}</button>
+                <button class="qa-input" style="cursor: pointer;" onclick="document.querySelector('.qa-input[name=question]').value='sentiment for {{ ticker }}'">Sentiment for {{ ticker }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- End Tab 1: stock-research-view -->
+
+      <!-- Tab 2: Signal Screener View -->
+      <div id="screener-view-area" style="display: none;">
+        <!-- Loaded dynamically via HTMX -->
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Host App JS Bridge -->
+  <script src="/static/js/bridge.js"></script>
+</body>
+</html>
